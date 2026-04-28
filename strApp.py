@@ -117,6 +117,10 @@ def load_vector_store(pdf_name):
 
 if "msg" not in st.session_state:
     st.session_state.msg = []
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+
 
 for message in st.session_state.msg:
     st.chat_message(message["role"]).markdown(
@@ -131,6 +135,10 @@ if prompt:
     st.session_state.msg.append(
         {"role": "user", "content": prompt}
     )
+    st.session_state.chat_history.append(
+        {"role": "user", "content": prompt}
+    )
+
 
     groq_chat = ChatGroq(
         groq_api_key=os.getenv("GROQ_API_KEY"),
@@ -142,7 +150,7 @@ if prompt:
     )
 
     retriever = vector_store.as_retriever(
-        search_kwargs={"k": 3}
+        search_kwargs={"k": 5}
     )
 
     qa_chain = RetrievalQA.from_chain_type(
@@ -151,9 +159,24 @@ if prompt:
         chain_type="stuff",
         return_source_documents=True
     )
+    history_context = "\n".join(
+        [f"{item['role']}: {item['content']}" for item in st.session_state.chat_history[-6:]]
+    )
+
+
+
+    full_query = f"""
+    Use the conversation history and context to answer.
+
+    Conversation:
+    {history_context}
+
+    Current question:
+    {prompt}
+    """
 
     result = qa_chain.invoke(
-        {"query": prompt}
+        {"query": full_query}
     )
 
     response = result["result"]
@@ -168,6 +191,10 @@ if prompt:
             "content": response
         }
     )
+    st.session_state.chat_history.append(
+        {"role": "assistant", "content": response}
+    )
+
 
     with st.expander("Sources"):
         for doc in result[
